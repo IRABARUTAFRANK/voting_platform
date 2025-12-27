@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organisation {
+  id          String   @id @default(cuid())
+  name        String
+  createdAt   DateTime @default(now())
+  
+  elections   Election[]
+  members     OrgMember[]
+  support     SupportThread[]
+}
+
+// --- ELECTION LOGIC ---
+model Election {
+  id          String   @id @default(cuid())
+  orgId       String
+  org         Organisation @relation(fields: [orgId], references: [id])
+  title       String
+  status      String   @default("DRAFT") // DRAFT, PAID, ACTIVE, CLOSED
+  
+  positions   Position[]
+  ballots     Ballot[]   // Tracks WHO voted
+  votes       AnonymousVote[] // Tracks WHAT they voted (No user ID link)
+}
+
+// --- VOTER MANAGEMENT (The Physical Codes) ---
+model OrgMember {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organisation @relation(fields: [orgId], references: [id])
+  fullName     String
+  voterCode    String   @unique
+  isRegistered Boolean  @default(false)
+  
+  ballots      Ballot[]
+}
+
+model Ballot {
+  id         String   @id @default(cuid())
+  memberId   String
+  member     OrgMember @relation(fields: [memberId], references: [id])
+  electionId String
+  election   Election  @relation(fields: [electionId], references: [id])
+  hasVoted   Boolean   @default(false)
+
+  @@unique([memberId, electionId])
+}
+
+// --- SECRET VOTING ENGINE ---
+model Position {
+  id         String      @id @default(cuid())
+  electionId String
+  election   Election    @relation(fields: [electionId], references: [id])
+  title      String      // e.g., "President"
+  candidates Candidate[]
+}
+
+model Candidate {
+  id         String   @id @default(cuid())
+  positionId String
+  position   Position @relation(fields: [positionId], references: [id])
+  name       String
+}
+
+model AnonymousVote {
+  id         String   @id @default(cuid())
+  electionId String
+  election   Election @relation(fields: [electionId], references: [id])
+  positionId String
+  candidateId String
+  createdAt  DateTime @default(now())
+}
+
+// --- SUPPORT CHAT SYSTEM ---
+model SupportThread {
+  id      String   @id @default(cuid())
+  orgId   String
+  org     Organisation @relation(fields: [orgId], references: [id])
+  status  String   @default("PENDING")
+  messages Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    SupportThread @relation(fields: [threadId], references: [id])
+  sender    String   // "SUPER_ADMIN" or "ORG_ADMIN"
+  content   String
+  createdAt DateTime @default(now())
+}
